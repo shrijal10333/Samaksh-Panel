@@ -1,0 +1,17 @@
+node_modules/
+.env
+.env.*
+*.db
+*.sqlite
+*.log
+
+# Temp & Runtime directories
+temp/
+backups/
+uploads/
+servers/
+
+# System and IDE
+.DS_Store
+Thumbs.db
+.vscode/
