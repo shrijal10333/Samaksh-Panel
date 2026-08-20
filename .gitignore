@@ -5,11 +5,11 @@ node_modules/
 *.sqlite
 *.log
 
-# Temp & Runtime directories
-temp/
-backups/
-uploads/
-servers/
+# Temp & Runtime directories (anchored to root)
+/temp/
+/backups/
+/uploads/
+/servers/
 
 # System and IDE
 .DS_Store
