@@ -4,9 +4,9 @@
     <div>
         <h1 class="page-title">
             <i class="fas fa-edit"></i>
-            Edit Server
+            Edit Instance: <%= editServer.name %>
         </h1>
-        <p class="page-subtitle">Update server configuration and settings</p>
+        <p class="page-subtitle">Update configuration, resources, and startup settings</p>
     </div>
     <a href="/admin/servers" class="btn btn-secondary">
         <i class="fas fa-arrow-left"></i>
@@ -20,7 +20,7 @@
             <div class="card-header" style="display: flex; align-items: center; justify-content: space-between;">
                 <h3 style="display: flex; align-items: center; gap: 10px;">
                     <div style="width: 40px; height: 40px; border-radius: 8px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 16px;">
-                        <i class="fas fa-server"></i>
+                        <i class="fas <%= editServer.runtime_type === 'nodejs' ? 'fa-brands fa-node-js' : editServer.runtime_type === 'python' ? 'fa-brands fa-python' : 'fa-server' %>"></i>
                     </div>
                     <%= editServer.name %>
                 </h3>
@@ -36,7 +36,7 @@
                     <div class="form-group">
                         <label class="form-label">
                             <i class="fas fa-tag"></i>
-                            Server Name *
+                            Name *
                         </label>
                         <div class="input-wrapper">
                             <input type="text" name="name" class="form-control" value="<%= editServer.name %>" required minlength="3" maxlength="64">
@@ -44,14 +44,25 @@
                         </div>
                         <span class="form-help">
                             <i class="fas fa-info-circle"></i>
-                            A friendly name for your server (3-64 characters)
+                            A friendly name for your server or bot (3-64 characters)
                         </span>
                     </div>
 
                     <div class="form-group">
                         <label class="form-label">
+                            <i class="fas fa-align-left"></i>
+                            Description
+                        </label>
+                        <div class="input-wrapper">
+                            <input type="text" name="description" class="form-control" value="<%= editServer.description || '' %>" placeholder="Production bot / SMP server" maxlength="255">
+                            <i class="fas fa-align-left input-icon"></i>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">
                             <i class="fas fa-user"></i>
-                            Server Owner *
+                            Owner *
                         </label>
                         <select name="owner_id" class="form-control" required>
                             <% users.forEach(u => { %>
@@ -60,54 +71,64 @@
                                 </option>
                             <% }) %>
                         </select>
-                        <span class="form-help">
-                            <i class="fas fa-info-circle"></i>
-                            The user who will own and manage this server
-                        </span>
                     </div>
 
                     <div class="form-group">
                         <label class="form-label">
-                            <i class="fas fa-cube"></i>
-                            Server Type *
+                            <i class="fas fa-layer-group"></i>
+                            Runtime Type
                         </label>
-                        <select name="server_type" class="form-control" required disabled>
-                            <option value="<%= editServer.server_type %>"><%= editServer.server_type %></option>
+                        <select name="runtime_type" id="runtimeType" class="form-control">
+                            <option value="minecraft" <%= (!editServer.runtime_type || editServer.runtime_type === 'minecraft') ? 'selected' : '' %>>🎮 Minecraft Server</option>
+                            <option value="nodejs" <%= editServer.runtime_type === 'nodejs' ? 'selected' : '' %>>🟢 Node.js Bot / Application</option>
+                            <option value="python" <%= editServer.runtime_type === 'python' ? 'selected' : '' %>>🐍 Python Bot / Script</option>
                         </select>
-                        <span class="form-help" style="color: var(--warning);">
-                            <i class="fas fa-exclamation-triangle"></i>
-                            Server type cannot be changed after creation
-                        </span>
                     </div>
 
+                    <!-- Custom startup command for Node/Python or custom scripts -->
                     <div class="form-group">
                         <label class="form-label">
-                            <i class="fas fa-code-branch"></i>
-                            Minecraft Version *
+                            <i class="fas fa-terminal"></i>
+                            Startup Command
                         </label>
                         <div class="input-wrapper">
-                            <input type="text" name="version" class="form-control" value="<%= editServer.version %>" required>
-                            <i class="fas fa-code-branch input-icon"></i>
+                            <input type="text" name="startup_command" id="startupCommand" class="form-control" value="<%= editServer.startup_command || '' %>" placeholder="e.g. node index.js, python3 bot.py" style="font-family: monospace;">
+                            <i class="fas fa-terminal input-icon"></i>
                         </div>
                         <span class="form-help">
                             <i class="fas fa-info-circle"></i>
-                            Current version (change with caution - may require server reinstall)
+                            Leave blank to use default (Java for Minecraft, <code>node index.js</code> for Node.js, <code>python3 bot.py</code> for Python)
                         </span>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">
+                            <i class="fas fa-folder"></i>
+                            Working Directory
+                        </label>
+                        <div class="input-wrapper">
+                            <input type="text" name="working_directory" class="form-control" value="<%= editServer.working_directory || '.' %>" placeholder="." style="font-family: monospace;">
+                            <i class="fas fa-folder input-icon"></i>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">
+                            <i class="fas fa-key"></i>
+                            Environment Variables (.env / KEY=VALUE)
+                        </label>
+                        <textarea name="environment_variables" class="form-control" rows="4" placeholder="BOT_TOKEN=xyz&#10;PORT=8000" style="font-family: monospace; font-size: 13px;"><%= editServer.environment_variables || '' %></textarea>
                     </div>
 
                     <div class="form-group">
                         <label class="form-label">
                             <i class="fas fa-network-wired"></i>
-                            Server Port *
+                            Port *
                         </label>
                         <div class="input-wrapper">
                             <input type="number" name="port" class="form-control" value="<%= editServer.port %>" required min="1024" max="65535">
                             <i class="fas fa-network-wired input-icon"></i>
                         </div>
-                        <span class="form-help">
-                            <i class="fas fa-info-circle"></i>
-                            Port number for the server (1024-65535)
-                        </span>
                     </div>
 
                     <div class="form-group">
@@ -119,10 +140,6 @@
                             <input type="number" name="ram" class="form-control" value="<%= editServer.ram %>" required min="512">
                             <i class="fas fa-memory input-icon"></i>
                         </div>
-                        <span class="form-help">
-                            <i class="fas fa-info-circle"></i>
-                            Memory allocated to the server (minimum: 512 MB)
-                        </span>
                     </div>
 
                     <div class="form-group">
@@ -134,10 +151,6 @@
                             <input type="number" name="cpu" class="form-control" value="<%= editServer.cpu || 2 %>" required min="1">
                             <i class="fas fa-microchip input-icon"></i>
                         </div>
-                        <span class="form-help">
-                            <i class="fas fa-info-circle"></i>
-                            Number of CPU cores (minimum: 1)
-                        </span>
                     </div>
 
                     <div class="form-group">
@@ -149,10 +162,6 @@
                             <input type="number" name="disk" class="form-control" value="<%= editServer.disk || 10240 %>" required min="1024">
                             <i class="fas fa-hdd input-icon"></i>
                         </div>
-                        <span class="form-help">
-                            <i class="fas fa-info-circle"></i>
-                            Disk space allocated (minimum: 1024 MB / 1 GB)
-                        </span>
                     </div>
 
                     <div style="display: flex; gap: 12px; justify-content: flex-end; padding-top: 24px; border-top: 1px solid var(--border-primary);">
@@ -162,7 +171,7 @@
                         </a>
                         <button type="submit" class="btn btn-primary" id="submitBtn">
                             <i class="fas fa-save"></i>
-                            Update Server
+                            Update Instance
                         </button>
                     </div>
                 </form>
@@ -171,23 +180,23 @@
     </div>
 
     <div class="col-4">
-        <!-- Server Info Card -->
+        <!-- Instance Info Card -->
         <div class="card">
             <div class="card-header">
                 <h3 style="display: flex; align-items: center; gap: 10px;">
                     <i class="fas fa-info-circle" style="color: var(--info);"></i>
-                    Server Details
+                    Instance Details
                 </h3>
             </div>
             <div class="card-body">
                 <div style="display: flex; flex-direction: column; gap: 16px;">
                     <div>
-                        <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 4px;">Server ID</div>
+                        <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 4px;">Instance ID</div>
                         <div style="font-weight: 600; color: var(--text-primary); font-family: monospace;">#<%= editServer.id %></div>
                     </div>
                     <div>
-                        <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 4px;">Server Type</div>
-                        <span class="badge badge-info"><%= editServer.server_type %></span>
+                        <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 4px;">Platform</div>
+                        <span class="badge badge-info"><%= editServer.runtime_type || 'minecraft' %> (<%= editServer.server_type %>)</span>
                     </div>
                     <div>
                         <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 4px;">Created</div>
@@ -259,12 +268,12 @@
                     <% if (editServer.status === 'running') { %>
                         <button class="btn btn-danger w-full" onclick="toggleServer('stop')">
                             <i class="fas fa-stop"></i>
-                            Stop Server
+                            Stop Process
                         </button>
                     <% } else { %>
                         <button class="btn btn-success w-full" onclick="toggleServer('start')">
                             <i class="fas fa-play"></i>
-                            Start Server
+                            Start Process
                         </button>
                     <% } %>
                 </div>
@@ -281,37 +290,14 @@
             </div>
             <div class="card-body">
                 <div style="margin-bottom: 16px;">
-                    <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 8px;">Delete Server</div>
+                    <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 8px;">Delete Instance</div>
                     <div style="font-size: 13px; color: var(--text-secondary); margin-bottom: 12px;">
-                        Permanently delete this server and all associated data. This action cannot be undone.
+                        Permanently delete this instance and all associated files. This action cannot be undone.
                     </div>
                     <button class="btn btn-danger w-full" onclick="deleteServer()">
                         <i class="fas fa-trash"></i>
-                        Delete Server
+                        Delete Instance
                     </button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Help Card -->
-        <div class="card">
-            <div class="card-header">
-                <h3 style="display: flex; align-items: center; gap: 10px;">
-                    <i class="fas fa-question-circle" style="color: var(--info);"></i>
-                    Help
-                </h3>
-            </div>
-            <div class="card-body">
-                <div style="font-size: 13px; color: var(--text-secondary); line-height: 1.6;">
-                    <p style="margin-bottom: 12px;">
-                        <strong>Changing Port:</strong> Make sure the new port is not already in use by another server.
-                    </p>
-                    <p style="margin-bottom: 12px;">
-                        <strong>Resource Limits:</strong> RAM, CPU, and Disk changes take effect after server restart. The server cannot exceed these limits.
-                    </p>
-                    <p style="margin-bottom: 0;">
-                        <strong>Version Change:</strong> Changing version may require server reinstall or cause compatibility issues.
-                    </p>
                 </div>
             </div>
         </div>
@@ -321,12 +307,35 @@
 <%- include('../partials/footer') %>
 
 <script>
-// Form submit handler
-document.getElementById('editServerForm').addEventListener('submit', function(e) {
+document.getElementById('editServerForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
     const submitBtn = document.getElementById('submitBtn');
     submitBtn.disabled = true;
     submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Updating...';
-    // Form will submit naturally to /admin/servers/:id/update
+    
+    const formData = new FormData(this);
+    const data = Object.fromEntries(formData.entries());
+    
+    try {
+        const res = await fetch('/admin/servers/<%= editServer.id %>/update', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        const result = await res.json();
+        if (result.success) {
+            showToast('Instance updated successfully!', 'success');
+            setTimeout(() => location.reload(), 1500);
+        } else {
+            showToast('Error: ' + (result.error || 'Failed to update'), 'error');
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<i class="fas fa-save"></i> Update Instance';
+        }
+    } catch (err) {
+        showToast('Network error updating instance', 'error');
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = '<i class="fas fa-save"></i> Update Instance';
+    }
 });
 
 function toggleServer(action) {
@@ -356,13 +365,13 @@ function toggleServer(action) {
 function deleteServer() {
     const serverName = '<%= editServer.name %>';
     
-    if (!confirm(`Are you sure you want to delete server "${serverName}"?\n\nThis will:\n• Delete all server files\n• Remove all backups\n• This action cannot be undone`)) {
+    if (!confirm(`Are you sure you want to delete "${serverName}"?\n\nThis will:\n• Delete all instance files\n• Remove all backups\n• This action cannot be undone`)) {
         return;
     }
 
     const secondConfirm = prompt(`Type "${serverName}" to confirm deletion:`);
     if (secondConfirm !== serverName) {
-        showToast('Deletion cancelled - server name did not match', 'error');
+        showToast('Deletion cancelled - name did not match', 'error');
         return;
     }
 

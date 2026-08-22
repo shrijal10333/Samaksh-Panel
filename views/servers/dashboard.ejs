@@ -8,7 +8,7 @@
         </h1>
         <p class="page-subtitle">Server Overview</p>
     </div>
-    <div class="page-actions">
+    <div class="page-actions" style="display: flex; gap: 8px; flex-wrap: wrap;">
         <button class="btn <%= server.status === 'running' ? 'btn-danger' : 'btn-success' %>" onclick="toggleServer()">
             <i class="fas fa-<%= server.status === 'running' ? 'stop' : 'play' %>"></i>
             <%= server.status === 'running' ? 'Stop' : 'Start' %>
@@ -16,6 +16,10 @@
         <button class="btn btn-warning" onclick="restartServer()" <%= server.status !== 'running' ? 'disabled' : '' %>>
             <i class="fas fa-sync-alt"></i>
             Restart
+        </button>
+        <button class="btn btn-danger" onclick="killServer()" <%= server.status !== 'running' ? 'disabled' : '' %>>
+            <i class="fas fa-skull"></i>
+            Kill
         </button>
     </div>
 </div>
@@ -365,6 +369,23 @@ function restartServer() {
         btn.disabled = false;
         btn.innerHTML = '<i class="fas fa-sync-alt"></i> Restart';
     });
+}
+
+function killServer() {
+    if (!confirm('Are you sure you want to forcefully KILL this process immediately?')) return;
+    fetch(`/servers/${serverId}/kill`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+            setTimeout(() => location.reload(), 1000);
+        } else {
+            alert('Error: ' + (data.error || 'Failed to kill process'));
+        }
+    })
+    .catch(err => alert('An error occurred'));
 }
 
 // Cleanup on page unload

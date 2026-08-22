@@ -4,16 +4,28 @@
     <div>
         <h1 class="page-title">
             <i class="fas fa-terminal"></i>
-            Console
+            Interactive Live Console
         </h1>
-        <p class="page-subtitle"><%= server.name %></p>
+        <p class="page-subtitle"><%= server.name %> &bull; <span class="badge <%= server.status === 'running' ? 'badge-success' : 'badge-danger' %>"><%= server.status %></span> (<%= server.runtime_type || 'minecraft' %>)</p>
     </div>
-    <div class="page-actions">
-        <button class="btn btn-secondary" onclick="clearConsole()">
+    <div class="page-actions" style="display: flex; gap: 8px; flex-wrap: wrap;">
+        <button class="btn <%= server.status === 'running' ? 'btn-danger' : 'btn-success' %> btn-sm" onclick="toggleServer()">
+            <i class="fas fa-<%= server.status === 'running' ? 'stop' : 'play' %>"></i>
+            <%= server.status === 'running' ? 'Stop' : 'Start' %>
+        </button>
+        <button class="btn btn-warning btn-sm" onclick="restartServer()" <%= server.status !== 'running' ? 'disabled' : '' %>>
+            <i class="fas fa-sync-alt"></i>
+            Restart
+        </button>
+        <button class="btn btn-danger btn-sm" onclick="killServer()" <%= server.status !== 'running' ? 'disabled' : '' %>>
+            <i class="fas fa-skull"></i>
+            Kill
+        </button>
+        <button class="btn btn-secondary btn-sm" onclick="clearConsole()">
             <i class="fas fa-eraser"></i>
             Clear
         </button>
-        <button class="btn btn-secondary" onclick="toggleAutoScroll()">
+        <button class="btn btn-secondary btn-sm" onclick="toggleAutoScroll()">
             <i class="fas fa-arrows-alt-v"></i>
             <span id="autoScrollText">Auto-scroll: ON</span>
         </button>
@@ -23,11 +35,11 @@
 <!-- Console Output -->
 <div class="card">
     <div class="card-body" style="padding: 0;">
-        <div id="console" style="background: #000; color: #fff; font-family: 'Courier New', monospace; font-size: 13px; padding: 20px; height: 500px; overflow-y: auto; border-radius: 16px;">
+        <div id="console" style="background: #0d1117; color: #c9d1d9; font-family: 'JetBrains Mono', 'Courier New', monospace; font-size: 13px; line-height: 1.5; padding: 20px; height: 500px; overflow-y: auto; border-radius: 12px; border: 1px solid var(--border-primary);">
             <% if (logContent) { %>
-                <pre style="margin: 0; white-space: pre-wrap;"><%= logContent %></pre>
+                <pre style="margin: 0; white-space: pre-wrap; word-wrap: break-word;"><%= logContent %></pre>
             <% } else { %>
-                <p style="color: #888;">No console output available. Start the server to see logs.</p>
+                <p style="color: #6e7681; margin: 0;">Console initialized. Start the process to stream live stdout/stderr.</p>
             <% } %>
         </div>
     </div>
@@ -35,41 +47,45 @@
 
 <!-- Command Input -->
 <% if (server.status === 'running') { %>
-<div class="card">
+<div class="card" style="margin-top: 16px;">
     <div class="card-body">
-        <% 
-        // Check if we can send commands (process reference exists)
-        const canSendCommands = typeof global !== 'undefined' && global.serverProcesses && global.serverProcesses[server.id];
-        %>
-        
-        <% if (!canSendCommands) { %>
-        <div class="alert alert-warning" style="margin-bottom: 16px;">
-            <i class="fas fa-exclamation-triangle"></i>
-            <span>Console commands are disabled. This server was started before the panel was restarted. Please restart the server from the dashboard to enable console commands.</span>
-        </div>
-        <% } %>
-        
         <form onsubmit="sendCommand(event)" style="display: flex; gap: 12px;">
-            <input type="text" id="commandInput" class="form-control" placeholder="<%= canSendCommands ? 'Enter server command...' : 'Restart server to enable commands' %>" style="flex: 1;" autocomplete="off" <%= !canSendCommands ? 'disabled' : '' %>>
-            <button type="submit" class="btn btn-primary" <%= !canSendCommands ? 'disabled' : '' %>>
+            <div class="input-wrapper" style="flex: 1;">
+                <input type="text" id="commandInput" class="form-control" placeholder="<%= server.runtime_type === 'nodejs' || server.runtime_type === 'python' ? 'Send stdin input to bot process...' : 'Enter server command (e.g. say, op, whitelist, gamemode)...' %>" style="font-family: monospace;" autocomplete="off" autofocus>
+                <i class="fas fa-terminal input-icon"></i>
+            </div>
+            <button type="submit" class="btn btn-primary" id="sendBtn">
                 <i class="fas fa-paper-plane"></i>
-                Send
+                Send Command
             </button>
         </form>
-        <div style="margin-top: 12px; color: var(--text-muted); font-size: 12px;">
+        <div style="margin-top: 12px; color: var(--text-muted); font-size: 12px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
             <strong>Quick Commands:</strong>
-            <button class="btn btn-sm btn-secondary" onclick="quickCommand('list')" style="margin-left: 8px;" <%= !canSendCommands ? 'disabled' : '' %>>list</button>
-            <button class="btn btn-sm btn-secondary" onclick="quickCommand('help')" <%= !canSendCommands ? 'disabled' : '' %>>help</button>
-            <button class="btn btn-sm btn-secondary" onclick="quickCommand('save-all')" <%= !canSendCommands ? 'disabled' : '' %>>save-all</button>
-            <button class="btn btn-sm btn-secondary" onclick="quickCommand('whitelist list')" <%= !canSendCommands ? 'disabled' : '' %>>whitelist</button>
-            <button class="btn btn-sm btn-secondary" onclick="quickCommand('tps')" <%= !canSendCommands ? 'disabled' : '' %>>tps</button>
+            <% if (!server.runtime_type || server.runtime_type === 'minecraft') { %>
+                <button class="btn btn-sm btn-secondary" onclick="quickCommand('list')">list</button>
+                <button class="btn btn-sm btn-secondary" onclick="quickCommand('help')">help</button>
+                <button class="btn btn-sm btn-secondary" onclick="quickCommand('tps')">tps</button>
+                <button class="btn btn-sm btn-secondary" onclick="quickCommand('whitelist list')">whitelist</button>
+                <button class="btn btn-sm btn-secondary" onclick="quickCommand('say Hello world!')">say Hello!</button>
+                <button class="btn btn-sm btn-secondary" onclick="quickCommand('save-all')">save-all</button>
+            <% } else if (server.runtime_type === 'nodejs') { %>
+                <button class="btn btn-sm btn-secondary" onclick="quickCommand('help')">help</button>
+                <button class="btn btn-sm btn-secondary" onclick="quickCommand('status')">status</button>
+                <button class="btn btn-sm btn-secondary" onclick="quickCommand('ping')">ping</button>
+                <button class="btn btn-sm btn-secondary" onclick="quickCommand('stats')">stats</button>
+            <% } else { %>
+                <button class="btn btn-sm btn-secondary" onclick="quickCommand('help')">help</button>
+                <button class="btn btn-sm btn-secondary" onclick="quickCommand('status')">status</button>
+                <button class="btn btn-sm btn-secondary" onclick="quickCommand('ping')">ping</button>
+                <button class="btn btn-sm btn-secondary" onclick="quickCommand('info')">info</button>
+            <% } %>
         </div>
     </div>
 </div>
 <% } else { %>
-<div class="alert alert-warning">
+<div class="alert alert-warning" style="margin-top: 16px;">
     <i class="fas fa-exclamation-triangle"></i>
-    <span>Server must be running to send commands</span>
+    <span>Process is currently stopped. Start the instance to send interactive commands and stream live output.</span>
 </div>
 <% } %>
 
@@ -78,6 +94,62 @@ const serverId = <%= server.id %>;
 const consoleDiv = document.getElementById('console');
 let autoScroll = true;
 let socket = null;
+
+function toggleServer() {
+    const action = '<%= server.status %>' === 'running' ? 'stop' : 'start';
+    if (!confirm(`Are you sure you want to ${action} this instance?`)) return;
+    
+    fetch(`/servers/${serverId}/${action}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+            setTimeout(() => location.reload(), 1500);
+        } else {
+            alert('Error: ' + (data.error || `Failed to ${action} process`));
+        }
+    })
+    .catch(err => {
+        console.error('Error:', err);
+        alert('An error occurred');
+    });
+}
+
+function restartServer() {
+    if (!confirm('Are you sure you want to restart this instance?')) return;
+    fetch(`/servers/${serverId}/restart`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+            setTimeout(() => location.reload(), 2000);
+        } else {
+            alert('Error: ' + (data.error || 'Failed to restart'));
+        }
+    })
+    .catch(err => alert('An error occurred'));
+}
+
+function killServer() {
+    if (!confirm('Are you sure you want to forcefully KILL this process immediately?')) return;
+    fetch(`/servers/${serverId}/kill`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+            setTimeout(() => location.reload(), 1000);
+        } else {
+            alert('Error: ' + (data.error || 'Failed to kill process'));
+        }
+    })
+    .catch(err => alert('An error occurred'));
+}
 
 // Auto-scroll to bottom
 function scrollToBottom() {
@@ -93,8 +165,8 @@ function toggleAutoScroll() {
 }
 
 function clearConsole() {
-    if (confirm('Clear console output?')) {
-        consoleDiv.innerHTML = '<p style="color: #888;">Console cleared</p>';
+    if (confirm('Clear console output window?')) {
+        consoleDiv.innerHTML = '<p style="color: #6e7681; margin: 0;">Console cleared</p>';
     }
 }
 
@@ -102,11 +174,10 @@ function sendCommand(e) {
     e.preventDefault();
     const input = document.getElementById('commandInput');
     const command = input.value.trim();
-    
     if (!command) return;
     
     // Add command to history
-    if (command && !commandHistory.includes(command)) {
+    if (!commandHistory.includes(command)) {
         commandHistory.push(command);
         if (commandHistory.length > 50) {
             commandHistory.shift();
@@ -123,54 +194,24 @@ function sendCommand(e) {
     .then(data => {
         if (data.success) {
             input.value = '';
-            // Add command to console
+            // Add command to console preview
             const pre = document.createElement('pre');
             pre.style.margin = '0';
-            pre.style.color = '#ffff00';
+            pre.style.color = '#38bdf8';
             pre.style.fontWeight = 'bold';
             pre.textContent = '> ' + command;
             consoleDiv.appendChild(pre);
             scrollToBottom();
         } else {
-            // Check if RCON was auto-fixed
-            if (data.autoFixed && data.action === 'restart') {
-                // Show success message with restart button
-                const successDiv = document.createElement('div');
-                successDiv.style.cssText = 'margin: 10px 0; padding: 16px; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 8px; color: #10b981;';
-                successDiv.innerHTML = `
-                    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
-                        <i class="fas fa-check-circle" style="font-size: 20px;"></i>
-                        <strong>✅ RCON Automatically Enabled!</strong>
-                    </div>
-                    <p style="margin: 0 0 12px 0; color: var(--text-secondary);">${data.error}</p>
-                    <button onclick="location.reload()" class="btn btn-success" style="padding: 8px 16px; border-radius: 6px; border: none; cursor: pointer; font-weight: 600;">
-                        <i class="fas fa-sync"></i> Restart Server Now
-                    </button>
-                `;
-                consoleDiv.appendChild(successDiv);
-                scrollToBottom();
-            } else {
-                // Show error message
-                let errorMsg = data.error || 'Failed to send command';
-                if (data.hint) {
-                    errorMsg += '<br><br><small>' + data.hint + '</small>';
-                }
-                
-                const errorDiv = document.createElement('div');
-                errorDiv.style.cssText = 'margin: 10px 0; padding: 12px; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 8px; color: #ef4444;';
-                errorDiv.innerHTML = '<strong>⚠️ Error:</strong> ' + errorMsg;
-                consoleDiv.appendChild(errorDiv);
-                scrollToBottom();
-            }
+            const errorDiv = document.createElement('div');
+            errorDiv.style.cssText = 'margin: 6px 0; padding: 10px; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 6px; color: #ef4444;';
+            errorDiv.innerHTML = '<strong>⚠️ Command Error:</strong> ' + (data.error || 'Failed to send command');
+            consoleDiv.appendChild(errorDiv);
+            scrollToBottom();
         }
     })
     .catch(err => {
         console.error('Error:', err);
-        const errorDiv = document.createElement('div');
-        errorDiv.style.cssText = 'margin: 10px 0; padding: 12px; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 8px; color: #ef4444;';
-        errorDiv.innerHTML = '<strong>⚠️ Error:</strong> An error occurred while sending the command';
-        consoleDiv.appendChild(errorDiv);
-        scrollToBottom();
     });
 }
 
@@ -190,13 +231,9 @@ function initializeSocket() {
     
     socket = io();
     
-    // Join server room
     socket.emit('join-server', serverId);
-    console.log('Joined server room:', serverId);
     
-    // Listen for console output (backend emits 'console' event)
     socket.on('console', (data) => {
-        // Handle both string and object formats
         let output = '';
         if (typeof data === 'string') {
             output = data;
@@ -212,65 +249,42 @@ function initializeSocket() {
             pre.style.whiteSpace = 'pre-wrap';
             pre.style.wordWrap = 'break-word';
             
-            // Color coding for different log levels
-            if (output.includes('[ERROR]') || output.includes('ERROR')) {
-                pre.style.color = '#ff5555';
-            } else if (output.includes('[WARN]') || output.includes('WARN')) {
-                pre.style.color = '#ffaa00';
-            } else if (output.includes('[INFO]') || output.includes('INFO')) {
-                pre.style.color = '#ffffff';
-            } else if (output.includes('[DEBUG]') || output.includes('DEBUG')) {
-                pre.style.color = '#5555ff';
-            } else if (output.includes('[PANEL')) {
-                pre.style.color = '#00ffff';
+            if (output.includes('[ERROR]') || output.includes('Error:') || output.includes('Traceback (most recent call last)')) {
+                pre.style.color = '#f87171';
+            } else if (output.includes('[WARN]') || output.includes('Warning:')) {
+                pre.style.color = '#fbbf24';
+            } else if (output.includes('[INFO]')) {
+                pre.style.color = '#e2e8f0';
+            } else if (output.includes('[PANEL]')) {
+                pre.style.color = '#38bdf8';
                 pre.style.fontWeight = 'bold';
             } else {
-                pre.style.color = '#ffffff';
+                pre.style.color = '#c9d1d9';
             }
             
             pre.textContent = output;
             consoleDiv.appendChild(pre);
             scrollToBottom();
             
-            // Keep only last 1000 lines for performance
             while (consoleDiv.children.length > 1000) {
                 consoleDiv.removeChild(consoleDiv.firstChild);
             }
         }
     });
     
-    // Handle connection status
     socket.on('connect', () => {
-        console.log('Socket connected');
         const statusMsg = document.createElement('pre');
         statusMsg.style.margin = '0';
-        statusMsg.style.color = '#00ffff';
+        statusMsg.style.color = '#34d399';
         statusMsg.style.fontWeight = 'bold';
-        statusMsg.textContent = '[PANEL] Connected to live console\n';
+        statusMsg.textContent = '[PANEL] Connected to process output stream\n';
         consoleDiv.appendChild(statusMsg);
         scrollToBottom();
-    });
-    
-    socket.on('disconnect', () => {
-        console.log('Socket disconnected');
-        const statusMsg = document.createElement('pre');
-        statusMsg.style.margin = '0';
-        statusMsg.style.color = '#ff5555';
-        statusMsg.style.fontWeight = 'bold';
-        statusMsg.textContent = '[PANEL] Disconnected from live console\n';
-        consoleDiv.appendChild(statusMsg);
-        scrollToBottom();
-    });
-    
-    socket.on('error', (error) => {
-        console.error('Socket error:', error);
     });
 }
 
-// Initialize socket connection
 initializeSocket();
 
-// Cleanup on page unload
 window.addEventListener('beforeunload', () => {
     if (socket) {
         socket.emit('leave-server', serverId);
@@ -303,14 +317,6 @@ if (commandInput) {
         }
     });
 }
-
-// Auto-reconnect if connection is lost
-setInterval(() => {
-    if (socket && !socket.connected) {
-        console.log('Reconnecting socket...');
-        initializeSocket();
-    }
-}, 5000);
 </script>
 
 <%- include('../partials/footer') %>

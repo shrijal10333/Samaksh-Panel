@@ -692,10 +692,42 @@ db.serialize(() => {
         status TEXT DEFAULT 'stopped',
         version TEXT DEFAULT 'latest',
         server_type TEXT DEFAULT 'vanilla',
+        runtime_type TEXT DEFAULT 'minecraft',
+        startup_command TEXT DEFAULT '',
+        working_directory TEXT DEFAULT '',
+        environment_variables TEXT DEFAULT '{}',
+        description TEXT DEFAULT '',
         settings TEXT DEFAULT '{}',
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (owner_id) REFERENCES users (id)
     )`);
+
+    // Add server columns for bot support if table already exists
+    db.run('ALTER TABLE servers ADD COLUMN runtime_type TEXT DEFAULT "minecraft"', (err) => {
+        if (err && !err.message.includes('duplicate column name')) {
+            console.error('Error adding runtime_type to servers:', err.message);
+        }
+    });
+    db.run('ALTER TABLE servers ADD COLUMN startup_command TEXT DEFAULT ""', (err) => {
+        if (err && !err.message.includes('duplicate column name')) {
+            console.error('Error adding startup_command to servers:', err.message);
+        }
+    });
+    db.run('ALTER TABLE servers ADD COLUMN working_directory TEXT DEFAULT ""', (err) => {
+        if (err && !err.message.includes('duplicate column name')) {
+            console.error('Error adding working_directory to servers:', err.message);
+        }
+    });
+    db.run('ALTER TABLE servers ADD COLUMN environment_variables TEXT DEFAULT "{}"', (err) => {
+        if (err && !err.message.includes('duplicate column name')) {
+            console.error('Error adding environment_variables to servers:', err.message);
+        }
+    });
+    db.run('ALTER TABLE servers ADD COLUMN description TEXT DEFAULT ""', (err) => {
+        if (err && !err.message.includes('duplicate column name')) {
+            console.error('Error adding description to servers:', err.message);
+        }
+    });
     // Subusers table
     db.run(`CREATE TABLE IF NOT EXISTS subusers (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -2303,6 +2335,107 @@ rcon.password=${rconPassword}
   }
 }
 
+// Helper function to create starter files for Node.js and Python bots if none exist
+function ensureBotStarterFiles(serverDir, workingDir, runtimeType, port) {
+  if (runtimeType === 'nodejs') {
+    let hasJs = false;
+    if (fs.existsSync(workingDir)) {
+      try {
+        hasJs = fs.readdirSync(workingDir).some(f => f.endsWith('.js') || f.endsWith('.ts') || f === 'package.json');
+      } catch {}
+    }
+    if (!hasJs) {
+      if (!fs.existsSync(workingDir)) fs.mkdirSync(workingDir, { recursive: true });
+      const indexJs = `console.log('🤖 Node.js bot instance started!');
+console.log('PID: ' + process.pid + ' | Working Directory: ' + process.cwd());
+console.log('Port: ' + (process.env.PORT || ${port || 8000}));
+console.log('Ready to receive stdin commands. Type "ping", "status", or "help".\\n');
+
+process.stdin.setEncoding('utf8');
+process.stdin.on('data', (data) => {
+    const cmd = data.toString().trim();
+    if (!cmd) return;
+    console.log('[BOT RECEIVED]: ' + cmd);
+    if (cmd === 'ping') {
+        console.log('pong! 🏓');
+    } else if (cmd === 'status') {
+        console.log('Bot is running. Uptime: ' + Math.floor(process.uptime()) + 's | PID: ' + process.pid);
+    } else if (cmd === 'help') {
+        console.log('Available commands: ping, status, help, stop');
+    } else if (cmd === 'stop') {
+        console.log('Stopping gracefully...');
+        process.exit(0);
+    }
+});
+
+setInterval(() => {
+    const memMB = Math.round(process.memoryUsage().rss / 1024 / 1024);
+    console.log('[HEARTBEAT] Memory: ' + memMB + 'MB | Uptime: ' + Math.floor(process.uptime()) + 's');
+}, 30000);
+`;
+      fs.writeFileSync(path.join(workingDir, 'index.js'), indexJs, 'utf8');
+
+      const pkgJson = JSON.stringify({
+        name: 'nodejs-bot',
+        version: '1.0.0',
+        description: 'Bot instance managed by Samaksh-Panel',
+        main: 'index.js',
+        scripts: {
+          start: 'node index.js'
+        },
+        dependencies: {}
+      }, null, 2);
+      fs.writeFileSync(path.join(workingDir, 'package.json'), pkgJson, 'utf8');
+    }
+  } else if (runtimeType === 'python') {
+    let hasPy = false;
+    if (fs.existsSync(workingDir)) {
+      try {
+        hasPy = fs.readdirSync(workingDir).some(f => f.endsWith('.py') || f === 'requirements.txt');
+      } catch {}
+    }
+    if (!hasPy) {
+      if (!fs.existsSync(workingDir)) fs.mkdirSync(workingDir, { recursive: true });
+      const botPy = `import sys
+import os
+import time
+import threading
+
+print("🐍 Python bot instance started!", flush=True)
+print(f"PID: {os.getpid()} | Working Directory: {os.getcwd()}", flush=True)
+print(f"Port: {os.environ.get('PORT', '${port || 8000}')}", flush=True)
+print("Ready to receive stdin commands. Type 'ping', 'status', or 'help'.\\n", flush=True)
+
+def input_listener():
+    for line in sys.stdin:
+        cmd = line.strip()
+        if not cmd:
+            continue
+        print(f"[BOT RECEIVED]: {cmd}", flush=True)
+        if cmd == "ping":
+            print("pong! 🏓", flush=True)
+        elif cmd == "status":
+            print(f"Bot is running. PID: {os.getpid()}", flush=True)
+        elif cmd == "help":
+            print("Available commands: ping, status, help, stop", flush=True)
+        elif cmd == "stop":
+            print("Stopping gracefully...", flush=True)
+            os._exit(0)
+
+threading.Thread(target=input_listener, daemon=True).start()
+
+while True:
+    print(f"[HEARTBEAT] Python bot PID: {os.getpid()} is active", flush=True)
+    time.sleep(30)
+`;
+      fs.writeFileSync(path.join(workingDir, 'bot.py'), botPy, 'utf8');
+
+      const reqTxt = `# Python Bot Dependencies\n`;
+      fs.writeFileSync(path.join(workingDir, 'requirements.txt'), reqTxt, 'utf8');
+    }
+  }
+}
+
 async function sendCommand(serverId, command) {
   if (!await isServerRunning(serverId)) {
     console.log(`Cannot send command to server ${serverId}: server not running`);
@@ -2312,15 +2445,15 @@ async function sendCommand(serverId, command) {
   try {
     const serverProcess = global.serverProcesses && global.serverProcesses[serverId];
     
-    // Try stdin first (works for servers started by this panel instance)
+    // Try stdin first (works for Minecraft servers, Node.js bots, and Python bots started by panel)
     if (serverProcess && !serverProcess.killed && serverProcess.stdin && serverProcess.stdin.writable) {
       serverProcess.stdin.write(command + '\n');
       console.log(`Command sent to server ${serverId} via stdin: ${command}`);
       return true;
     } else {
-      console.log(`Cannot send command via stdin to server ${serverId}, trying RCON...`);
+      console.log(`Cannot send command via stdin to server ${serverId}, checking RCON fallback...`);
       
-      // Try RCON as fallback (works for reconnected servers)
+      // Try RCON as fallback for Minecraft servers
       try {
         const server = await dbGet('SELECT * FROM servers WHERE id = ?', [serverId]);
         if (!server) {
@@ -2328,6 +2461,12 @@ async function sendCommand(serverId, command) {
           return false;
         }
         
+        const runtimeType = (server.runtime_type || '').toLowerCase();
+        if (runtimeType === 'nodejs' || runtimeType === 'python') {
+          console.log(`Server ${serverId} is ${runtimeType} without active stdin`);
+          return false;
+        }
+
         const settings = JSON.parse(server.settings || '{}');
         const rconEnabled = settings.rcon === true || settings['enable-rcon'] === true;
         const rconPort = settings['rcon.port'] || settings.rconPort || (server.port + 1000);
@@ -2362,165 +2501,243 @@ async function sendCommand(serverId, command) {
     return false;
   }
 }
+
 async function startServer(serverId) {
   const server = await dbGet('SELECT * FROM servers WHERE id = ?', [serverId]);
   if (!server) throw new Error('Server not found');
-  
-  // Use existing port - don't force changes
-  const assignedPort = server.port;
-  console.log(`Starting ${server.server_type} server ${serverId} on existing port ${assignedPort}`);
   
   // Check if server is already running
   if (await isServerRunning(serverId)) {
     throw new Error('Server already running');
   }
+
+  // Determine runtime type
+  let runtimeType = (server.runtime_type || '').toLowerCase().trim();
+  if (!['nodejs', 'python', 'minecraft'].includes(runtimeType)) {
+    if (server.server_type === 'nodejs') runtimeType = 'nodejs';
+    else if (server.server_type === 'python') runtimeType = 'python';
+    else runtimeType = 'minecraft';
+  }
+  
+  const assignedPort = server.port;
+  console.log(`Starting ${runtimeType} (${server.server_type}) instance ${serverId} on port ${assignedPort}`);
   
   const serverDir = resolveServerPath(serverId);
-  
-  // ENFORCE PORT PROTECTION FOR PROXY SERVERS BEFORE STARTING
-  if (['velocity', 'bungeecord', 'waterfall'].includes(server.server_type)) {
-    console.log(`🔒 Enforcing port protection for ${server.server_type} server ${serverId}...`);
-    await enforceProxyServerPort(serverId, server.server_type, server.port);
+  if (!fs.existsSync(serverDir)) {
+    fs.mkdirSync(serverDir, { recursive: true });
   }
-  
-  // ENFORCE PORT PROTECTION FOR MINECRAFT SERVERS BEFORE STARTING
-  if (!['velocity', 'bungeecord', 'waterfall', 'bedrock'].includes(server.server_type)) {
-    console.log(`🔒 Enforcing port protection for Minecraft server ${serverId}...`);
-    await enforceMinecraftServerPort(serverId, server.port);
-  }
-  
-  // Check for world lock file (indicates another instance is running)
-  const worldLockFile = path.join(serverDir, 'world', 'session.lock');
-  if (fs.existsSync(worldLockFile)) {
-    console.log(`Warning: World lock file exists for server ${serverId}, attempting to remove...`);
-    try {
-      fs.unlinkSync(worldLockFile);
-      console.log(`Removed stale world lock file for server ${serverId}`);
-    } catch (err) {
-      console.error(`Failed to remove world lock file for server ${serverId}:`, err);
-      throw new Error('Server world is locked by another process. Please ensure no other instances are running.');
+
+  // Determine working directory
+  let workingDir = serverDir;
+  if (server.working_directory && server.working_directory.trim() && server.working_directory.trim() !== '.') {
+    const cleanRel = path.normalize(server.working_directory.trim()).replace(/^(\.\.[\/\\])+/, '').replace(/^[\/\\]+/, '');
+    if (cleanRel && cleanRel !== '.') {
+      workingDir = path.join(serverDir, cleanRel);
+      if (!fs.existsSync(workingDir)) {
+        fs.mkdirSync(workingDir, { recursive: true });
+      }
     }
   }
-  
-  // Check for server executable based on server type
-  let serverExecutable;
-  let javaPath = 'java';
-  let javaArgs = [];
-  
-  if (server.server_type === 'bedrock') {
-    // Bedrock Dedicated Server uses bedrock_server.exe on Windows
-    if (process.platform === 'win32') {
-      serverExecutable = path.join(serverDir, 'bedrock_server.exe');
-      if (!fs.existsSync(serverExecutable)) {
-        console.log(`⚠️  bedrock_server.exe not found for server ${serverId}, attempting to download...`);
-        try {
-          await downloadServerJar(server.server_type, server.version, serverDir);
-          console.log(`✅ Successfully downloaded Bedrock server files`);
-        } catch (downloadErr) {
-          throw new Error(`bedrock_server.exe not found and download failed: ${downloadErr.message}`);
-        }
-      }
-      javaPath = serverExecutable;
-      javaArgs = []; // Bedrock server doesn't use Java args
-    } else {
-      serverExecutable = path.join(serverDir, 'bedrock_server');
-      if (!fs.existsSync(serverExecutable)) {
-        console.log(`⚠️  bedrock_server not found for server ${serverId}, attempting to download...`);
-        try {
-          await downloadServerJar(server.server_type, server.version, serverDir);
-          console.log(`✅ Successfully downloaded Bedrock server files`);
-        } catch (downloadErr) {
-          throw new Error(`bedrock_server not found and download failed: ${downloadErr.message}`);
-        }
-      }
-      javaPath = serverExecutable;
-      javaArgs = [];
-    }
-    console.log(`Using Bedrock Dedicated Server executable: ${serverExecutable}`);
-  } else {
-    // Java Edition servers require server.jar
-    const serverJarPath = path.join(serverDir, 'server.jar');
-    if (!fs.existsSync(serverJarPath)) {
-      console.log(`⚠️  server.jar not found for server ${serverId}, attempting to download...`);
+
+  // Prepare environment variables
+  const customEnv = {
+    ...process.env,
+    PORT: String(assignedPort || 8000),
+    SERVER_ID: String(server.id),
+    SERVER_NAME: server.name || '',
+    NODE_ENV: 'production',
+    PYTHONUNBUFFERED: '1',
+    FORCE_COLOR: '1'
+  };
+
+  // Load existing .env file if present
+  const envFileLocations = [path.join(workingDir, '.env'), path.join(serverDir, '.env')];
+  for (const envPath of envFileLocations) {
+    if (fs.existsSync(envPath)) {
       try {
-        await downloadServerJar(server.server_type, server.version, serverDir);
-        console.log(`✅ Successfully downloaded server.jar for ${server.server_type} ${server.version}`);
-      } catch (downloadErr) {
-        throw new Error(`server.jar not found and download failed: ${downloadErr.message}`);
-      }
-    } else {
-      console.log(`✅ server.jar found for server ${serverId}`);
-    }
-    
-    // Determine Java executable for Java Edition servers
-    if (process.platform === 'win32') {
-      // Try different Java paths on Windows
-      const javaPaths = ['java', 'java.exe'];
-      let javaFound = false;
-      
-      for (const testPath of javaPaths) {
-        try {
-          const javaVersionOutput = await execAsync(`${testPath} -version`);
-          javaPath = testPath;
-          javaFound = true;
-          
-          // Check Java version for compatibility
-          const versionMatch = javaVersionOutput.stderr.match(/version "(\d+)\.?(\d*)/);
-          if (versionMatch) {
-            const majorVersion = parseInt(versionMatch[1]);
-            const minorVersion = parseInt(versionMatch[2] || '0');
-            
-            // Java 8 is version "1.8", Java 9+ is version "9", "17", etc.
-            const actualVersion = majorVersion === 1 ? minorVersion : majorVersion;
-            
-            if (actualVersion < 17) {
-              console.warn(`Server ${serverId}: Java ${actualVersion} detected. Minecraft 1.17+ requires Java 17 or higher.`);
-              console.warn('Consider upgrading Java or using an older Minecraft version.');
+        const envContent = fs.readFileSync(envPath, 'utf8');
+        const lines = envContent.split('\n');
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (trimmed && !trimmed.startsWith('#') && trimmed.includes('=')) {
+            const eqIdx = trimmed.indexOf('=');
+            const k = trimmed.substring(0, eqIdx).trim();
+            let v = trimmed.substring(eqIdx + 1).trim();
+            if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) {
+              v = v.slice(1, -1);
             }
+            if (k) customEnv[k] = v;
           }
-          break;
-        } catch (err) {
-          // Continue to next path
         }
-      }
-      
-      if (!javaFound) {
-        throw new Error('Java not found. Please install Java and ensure it\'s in your PATH.');
-      }
-    }
-    
-    const xms = Math.max(256, Math.floor(server.ram / 4));
-    const settings = JSON.parse(server.settings || '{}');
-    javaArgs = ['-Xms' + xms + 'M', '-Xmx' + server.ram + 'M', '-jar', 'server.jar', 'nogui'];
-    
-    if (settings.startup) {
-      // Parse custom startup command
-      const customArgs = settings.startup.split(' ').filter(arg => arg.trim());
-      if (customArgs[0] === 'java' || customArgs[0] === 'java.exe') {
-        javaArgs = customArgs.slice(1);
-      } else {
-        javaArgs = customArgs;
+      } catch (envErr) {
+        console.error(`Error reading .env for server ${serverId}:`, envErr.message);
       }
     }
   }
 
-  console.log(`Starting server ${serverId} with command: ${javaPath} ${javaArgs.join(' ')}`);
+  // Parse environment variables from database
+  if (server.environment_variables) {
+    try {
+      if (typeof server.environment_variables === 'string' && server.environment_variables.trim().startsWith('{')) {
+        const parsed = JSON.parse(server.environment_variables);
+        for (const [k, v] of Object.entries(parsed)) {
+          customEnv[k] = String(v);
+        }
+      } else if (typeof server.environment_variables === 'string') {
+        const lines = server.environment_variables.split('\n');
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (trimmed && !trimmed.startsWith('#') && trimmed.includes('=')) {
+            const eqIdx = trimmed.indexOf('=');
+            const k = trimmed.substring(0, eqIdx).trim();
+            let v = trimmed.substring(eqIdx + 1).trim();
+            if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) {
+              v = v.slice(1, -1);
+            }
+            if (k) customEnv[k] = v;
+          }
+        }
+      }
+    } catch (e) {
+      console.error(`Error parsing environment variables for server ${serverId}:`, e.message);
+    }
+  }
 
-  // Start the server process detached so it runs independently
-  const serverProcess = spawn(javaPath, javaArgs, {
-    cwd: serverDir,
-    detached: true,
-    stdio: ['pipe', 'pipe', 'pipe']
-  });
+  // Ensure starter files for bots
+  if (runtimeType === 'nodejs' || runtimeType === 'python') {
+    ensureBotStarterFiles(serverDir, workingDir, runtimeType, assignedPort);
+  }
 
-  // Unref the process so the panel can exit without killing the server
+  // Build command and args
+  let execCmd = '';
+  let execArgs = [];
+  let useShell = false;
+
+  if (runtimeType === 'nodejs') {
+    const settings = JSON.parse(server.settings || '{}');
+    const startupCmd = (server.startup_command || settings.startup || 'node index.js').trim();
+    console.log(`Starting Node.js bot with command: ${startupCmd} in ${workingDir}`);
+    execCmd = startupCmd;
+    useShell = true;
+  } else if (runtimeType === 'python') {
+    const settings = JSON.parse(server.settings || '{}');
+    const startupCmd = (server.startup_command || settings.startup || 'python3 bot.py').trim();
+    console.log(`Starting Python bot with command: ${startupCmd} in ${workingDir}`);
+    execCmd = startupCmd;
+    useShell = true;
+  } else {
+    // MINECRAFT RUNTIME
+    // ENFORCE PORT PROTECTION FOR PROXY SERVERS BEFORE STARTING
+    if (['velocity', 'bungeecord', 'waterfall'].includes(server.server_type)) {
+      console.log(`🔒 Enforcing port protection for ${server.server_type} server ${serverId}...`);
+      await enforceProxyServerPort(serverId, server.server_type, server.port);
+    }
+    
+    // ENFORCE PORT PROTECTION FOR MINECRAFT SERVERS BEFORE STARTING
+    if (!['velocity', 'bungeecord', 'waterfall', 'bedrock'].includes(server.server_type)) {
+      console.log(`🔒 Enforcing port protection for Minecraft server ${serverId}...`);
+      await enforceMinecraftServerPort(serverId, server.port);
+    }
+    
+    // Check for world lock file (indicates another instance is running)
+    const worldLockFile = path.join(serverDir, 'world', 'session.lock');
+    if (fs.existsSync(worldLockFile)) {
+      console.log(`Warning: World lock file exists for server ${serverId}, attempting to remove...`);
+      try {
+        fs.unlinkSync(worldLockFile);
+        console.log(`Removed stale world lock file for server ${serverId}`);
+      } catch (err) {
+        console.error(`Failed to remove world lock file for server ${serverId}:`, err);
+        throw new Error('Server world is locked by another process. Please ensure no other instances are running.');
+      }
+    }
+    
+    if (server.server_type === 'bedrock') {
+      let serverExecutable;
+      if (process.platform === 'win32') {
+        serverExecutable = path.join(serverDir, 'bedrock_server.exe');
+      } else {
+        serverExecutable = path.join(serverDir, 'bedrock_server');
+      }
+      if (!fs.existsSync(serverExecutable)) {
+        console.log(`⚠️ bedrock executable not found for server ${serverId}, attempting download...`);
+        try {
+          await downloadServerJar(server.server_type, server.version, serverDir);
+        } catch (downloadErr) {
+          throw new Error(`Bedrock executable not found and download failed: ${downloadErr.message}`);
+        }
+      }
+      execCmd = serverExecutable;
+      execArgs = [];
+      useShell = false;
+    } else {
+      const serverJarPath = path.join(serverDir, 'server.jar');
+      if (!fs.existsSync(serverJarPath)) {
+        console.log(`⚠️ server.jar not found for server ${serverId}, attempting download...`);
+        try {
+          await downloadServerJar(server.server_type, server.version, serverDir);
+          console.log(`✅ Successfully downloaded server.jar for ${server.server_type} ${server.version}`);
+        } catch (downloadErr) {
+          throw new Error(`server.jar not found and download failed: ${downloadErr.message}`);
+        }
+      }
+      
+      let javaPath = 'java';
+      const xms = Math.max(256, Math.floor(server.ram / 4));
+      const settings = JSON.parse(server.settings || '{}');
+      execArgs = ['-Xms' + xms + 'M', '-Xmx' + server.ram + 'M', '-jar', 'server.jar', 'nogui'];
+      
+      if (server.startup_command || settings.startup) {
+        const customCmd = (server.startup_command || settings.startup).trim();
+        const customArgs = customCmd.split(' ').filter(arg => arg.trim());
+        if (customArgs[0] === 'java' || customArgs[0] === 'java.exe') {
+          javaPath = customArgs[0];
+          execArgs = customArgs.slice(1);
+        } else if (customArgs.length > 0) {
+          execCmd = customCmd;
+          useShell = true;
+        }
+      }
+      if (!useShell) {
+        execCmd = javaPath;
+      }
+    }
+  }
+
+  // Ensure logs directory exists
+  const logDir = path.join(serverDir, 'logs');
+  if (!fs.existsSync(logDir)) fs.mkdirSync(logDir, { recursive: true });
+  const logPath = path.join(logDir, 'latest.log');
+  if (!fs.existsSync(logPath)) fs.writeFileSync(logPath, '');
+
+  console.log(`Spawning instance ${serverId} in ${workingDir} with: ${execCmd} ${execArgs.join(' ')} (shell: ${useShell})`);
+
+  let serverProcess;
+  if (useShell) {
+    serverProcess = spawn(execCmd, {
+      cwd: workingDir,
+      env: customEnv,
+      shell: true,
+      detached: true,
+      stdio: ['pipe', 'pipe', 'pipe']
+    });
+  } else {
+    serverProcess = spawn(execCmd, execArgs, {
+      cwd: workingDir,
+      env: customEnv,
+      detached: true,
+      stdio: ['pipe', 'pipe', 'pipe']
+    });
+  }
+
+  // Unref the process so panel can exit without terminating the instance
   serverProcess.unref();
 
-  // Store the process ID for management
+  // Store the process in global table
   if (!global.serverProcesses) global.serverProcesses = {};
   global.serverProcesses[serverId] = serverProcess;
-  
-  // Save PID to file so we can reconnect after panel restart
+
+  // Save PID to file for reconnection
   const pidFile = path.join(serverDir, '.server.pid');
   try {
     fs.writeFileSync(pidFile, serverProcess.pid.toString());
@@ -2535,94 +2752,82 @@ async function startServer(serverId) {
   });
 
   serverProcess.on('exit', async (code, signal) => {
-    console.log(`Server ${serverId} exited with code ${code}, signal ${signal}`);
+    console.log(`Instance ${serverId} exited with code ${code}, signal ${signal}`);
     
-    // Check if server crashed immediately (within 10 seconds) - check BEFORE deleting start time
     const startTime = serverStartTimes[serverId] || Date.now();
     const uptime = Date.now() - startTime;
-    const crashedImmediately = uptime < 10000;
+    const crashedImmediately = uptime < 5000;
     
     // Clean up PID file
-    const pidFile = path.join(serverDir, '.server.pid');
     try {
-      if (fs.existsSync(pidFile)) {
-        fs.unlinkSync(pidFile);
-      }
-    } catch (err) {
-      console.error(`Failed to delete PID file for server ${serverId}:`, err);
-    }
+      if (fs.existsSync(pidFile)) fs.unlinkSync(pidFile);
+    } catch (err) {}
     
-    // Clean up start time file
     deleteServerStartTime(serverId);
     
     // Clean up stale world lock file
     try {
       const worldLockFile = path.join(serverDir, 'world', 'session.lock');
-      if (fs.existsSync(worldLockFile)) {
-        fs.unlinkSync(worldLockFile);
-        console.log(`Cleaned up world lock file for server ${serverId}`);
-      }
-    } catch (err) {
-      console.error(`Failed to delete world lock file for server ${serverId}:`, err);
-    }
+      if (fs.existsSync(worldLockFile)) fs.unlinkSync(worldLockFile);
+    } catch (err) {}
     
     delete global.serverProcesses[serverId];
     delete serverStartTimes[serverId];
     onlinePlayers[serverId] = [];
     await dbRun('UPDATE servers SET status = ? WHERE id = ?', ['stopped', serverId]);
+    io.to(`server:${serverId}`).emit('serverStatus', { status: 'stopped', code, signal });
     
-    // Check for common error codes and provide helpful messages
-    if (code === 1) {
-      console.error(`Server ${serverId} failed to start. Common causes:`);
-      console.error('- Java version incompatibility (newer Minecraft versions require Java 17+)');
-      console.error('- Missing or corrupted server.jar file');
-      console.error('- Insufficient memory allocation');
-      console.error('- Port already in use');
-      
-      // Emit error to connected clients
-      io.to(`server:${serverId}`).emit('console', '\n[PANEL ERROR] Server failed to start with exit code 1\n');
-      io.to(`server:${serverId}`).emit('console', '[PANEL ERROR] This is usually caused by Java version incompatibility.\n');
-      io.to(`server:${serverId}`).emit('console', '[PANEL ERROR] Minecraft 1.17+ requires Java 17 or higher.\n');
-      io.to(`server:${serverId}`).emit('console', '[PANEL ERROR] You currently have Java 8 installed.\n');
-      io.to(`server:${serverId}`).emit('console', '[PANEL ERROR] Please install Java 17+ from https://adoptium.net/\n');
-      io.to(`server:${serverId}`).emit('console', '[PANEL ERROR] Auto-restart has been disabled to prevent restart loops.\n\n');
-    }
-    
-    // Get server settings for auto-restart check
+    // Output exit message to console
+    const exitMsg = `\n[PANEL] Process terminated with exit code ${code !== null ? code : 'null'} (signal: ${signal || 'none'})\n`;
+    try {
+      fs.appendFileSync(logPath, exitMsg);
+    } catch {}
+    io.to(`server:${serverId}`).emit('console', exitMsg);
+
+    // Auto-restart if enabled
     try {
       const serverData = await dbGet('SELECT settings FROM servers WHERE id = ?', [serverId]);
       const settings = JSON.parse(serverData?.settings || '{}');
-      
-      // Auto-restart if enabled and not a clean shutdown, but not if it crashed immediately
       if (settings.autoRestart && code !== 0 && code !== null && !crashedImmediately) {
         console.log(`Auto-restarting server ${serverId} in 5 seconds...`);
         setTimeout(() => {
           startServer(serverId).catch(err => console.error('Auto-restart failed:', err));
         }, 5000);
-      } else if (crashedImmediately) {
-        console.error(`Server ${serverId} crashed immediately after starting. Auto-restart disabled to prevent loops.`);
-        io.to(`server:${serverId}`).emit('serverStatus', { status: 'stopped', error: 'Server crashed immediately after starting' });
       }
-    } catch (err) {
-      console.error(`Failed to get server settings for auto-restart check:`, err);
-    }
+    } catch (err) {}
   });
 
-  // Log stderr for debugging
-  serverProcess.stderr.on('data', (data) => {
-    const output = data.toString();
-    console.error(`Server ${serverId} stderr:`, output);
-  });
+  // Direct stdout & stderr capturing
+  if (serverProcess.stdout) {
+    serverProcess.stdout.on('data', (data) => {
+      const str = data.toString();
+      try {
+        fs.appendFileSync(logPath, str);
+      } catch {}
+      io.to(`server:${serverId}`).emit('console', str);
+      str.split('\n').forEach(line => {
+        if (line.trim()) processLogLine(serverId, line);
+      });
+    });
+  }
 
-  // Detach the process so it continues running independently
-  serverProcess.unref();
+  if (serverProcess.stderr) {
+    serverProcess.stderr.on('data', (data) => {
+      const str = data.toString();
+      try {
+        fs.appendFileSync(logPath, str);
+      } catch {}
+      io.to(`server:${serverId}`).emit('console', str);
+    });
+  }
 
   await dbRun('UPDATE servers SET status = ? WHERE id = ?', ['running', serverId]);
   serverStartTimes[serverId] = Date.now();
-  saveServerStartTime(serverId, serverStartTimes[serverId]); // Persist start time to file
+  saveServerStartTime(serverId, serverStartTimes[serverId]);
   onlinePlayers[serverId] = [];
   startLogTail(serverId);
 }
+
 async function stopServer(serverId, force = false) {
   if (!await isServerRunning(serverId)) {
     console.log(`Server ${serverId} is not running`);
@@ -2633,11 +2838,11 @@ async function stopServer(serverId, force = false) {
     const serverDir = resolveServerPath(serverId);
     const pidFile = path.join(serverDir, '.server.pid');
     const serverProcess = global.serverProcesses && global.serverProcesses[serverId];
+    const server = await dbGet('SELECT * FROM servers WHERE id = ?', [serverId]);
+    const runtimeType = server ? (server.runtime_type || '').toLowerCase() : 'minecraft';
     
     let pid = null;
-    let stoppedGracefully = false;
     
-    // Get PID from process or file
     if (serverProcess && !serverProcess.killed) {
       pid = serverProcess.pid;
     } else if (fs.existsSync(pidFile)) {
@@ -2653,121 +2858,83 @@ async function stopServer(serverId, force = false) {
       return false;
     }
     
-    // Check if process is actually running
     if (!isProcessRunning(pid)) {
-      console.log(`Server ${serverId} process (PID: ${pid}) is not running`);
-      // Clean up and return
-      if (serverProcess) {
-        delete global.serverProcesses[serverId];
-      }
-      if (fs.existsSync(pidFile)) {
-        fs.unlinkSync(pidFile);
-      }
+      console.log(`Server ${serverId} process (PID: ${pid}) is already dead`);
+      if (serverProcess) delete global.serverProcesses[serverId];
+      if (fs.existsSync(pidFile)) fs.unlinkSync(pidFile);
       deleteServerStartTime(serverId);
       onlinePlayers[serverId] = [];
       await dbRun('UPDATE servers SET status = ? WHERE id = ?', ['stopped', serverId]);
       return true;
     }
     
-    console.log(`Stopping server ${serverId} (PID: ${pid})${force ? ' (force)' : ''}`);
+    console.log(`Stopping instance ${serverId} (PID: ${pid}, runtime: ${runtimeType})${force ? ' [FORCE KILL]' : ''}`);
     
     if (force) {
-      // Force kill immediately
       try {
-        process.kill(pid, 'SIGKILL');
-        console.log(`Force killed server ${serverId} (PID: ${pid})`);
-      } catch (err) {
-        if (err.code === 'ESRCH') {
-          console.log(`Process ${pid} already stopped`);
-        } else {
-          console.error(`Failed to force kill PID ${pid}:`, err);
+        // Kill process tree or process
+        try {
+          process.kill(-pid, 'SIGKILL');
+        } catch {
+          process.kill(pid, 'SIGKILL');
         }
+        console.log(`Force killed process ${pid} for server ${serverId}`);
+      } catch (err) {
+        if (err.code !== 'ESRCH') console.error(`Failed to force kill PID ${pid}:`, err);
       }
     } else {
-      // Try graceful shutdown
+      // Graceful shutdown
       try {
-        // Send stop command via stdin if available
         if (serverProcess && serverProcess.stdin && serverProcess.stdin.writable) {
-          console.log(`Sending stop command to server ${serverId} via stdin`);
           serverProcess.stdin.write('stop\n');
-        } else {
-          // Send SIGTERM for graceful shutdown
-          console.log(`Sending SIGTERM to server ${serverId} (PID: ${pid})`);
-          process.kill(pid, 'SIGTERM');
         }
         
-        // Wait up to 30 seconds for graceful shutdown
-        const maxWaitTime = 30000;
-        const checkInterval = 1000;
+        // Also send SIGTERM / SIGINT for Node/Python
+        if (runtimeType === 'nodejs' || runtimeType === 'python') {
+          try {
+            process.kill(pid, 'SIGINT');
+          } catch {}
+        } else {
+          try {
+            process.kill(pid, 'SIGTERM');
+          } catch {}
+        }
+        
+        // Wait up to 10 seconds, then force kill if still running
         let waited = 0;
+        const checkInterval = 1000;
+        const maxWaitTime = 10000;
         
         const checkStopped = setInterval(() => {
           waited += checkInterval;
-          
           if (!isProcessRunning(pid)) {
             clearInterval(checkStopped);
-            console.log(`Server ${serverId} stopped gracefully`);
-            stoppedGracefully = true;
+            console.log(`Instance ${serverId} stopped gracefully`);
           } else if (waited >= maxWaitTime) {
             clearInterval(checkStopped);
-            console.log(`Server ${serverId} didn't stop gracefully after ${maxWaitTime/1000}s, force killing`);
-            
+            console.log(`Instance ${serverId} didn't stop in ${maxWaitTime/1000}s, killing PID ${pid}`);
             try {
-              process.kill(pid, 'SIGKILL');
-              console.log(`Force killed server ${serverId} (PID: ${pid})`);
-            } catch (err) {
-              if (err.code === 'ESRCH') {
-                console.log(`Process ${pid} already stopped`);
-              } else {
-                console.error(`Failed to force kill PID ${pid}:`, err.message);
-              }
-            }
+              try { process.kill(-pid, 'SIGKILL'); } catch { process.kill(pid, 'SIGKILL'); }
+            } catch (err) {}
           }
         }, checkInterval);
-        
       } catch (err) {
-        if (err.code === 'ESRCH') {
-          console.log(`Process ${pid} already stopped`);
-        } else {
-          console.error(`Error stopping server ${serverId}:`, err);
-        }
+        console.error(`Error stopping instance ${serverId}:`, err);
       }
     }
     
-    // Clean up PID file
     try {
-      if (fs.existsSync(pidFile)) {
-        fs.unlinkSync(pidFile);
-        console.log(`Deleted PID file for server ${serverId}`);
-      }
-    } catch (err) {
-      console.error(`Failed to delete PID file for server ${serverId}:`, err);
-    }
+      if (fs.existsSync(pidFile)) fs.unlinkSync(pidFile);
+    } catch (err) {}
     
-    // Clean up start time file
     deleteServerStartTime(serverId);
-    
-    // Clean up stale world lock file
-    try {
-      const worldLockFile = path.join(serverDir, 'world', 'session.lock');
-      if (fs.existsSync(worldLockFile)) {
-        fs.unlinkSync(worldLockFile);
-        console.log(`Cleaned up world lock file for server ${serverId}`);
-      }
-    } catch (err) {
-      console.error(`Failed to delete world lock file for server ${serverId}:`, err);
-    }
-    
-    // Clean up
-    if (global.serverProcesses) {
-      delete global.serverProcesses[serverId];
-    }
+    if (global.serverProcesses) delete global.serverProcesses[serverId];
     delete serverStartTimes[serverId];
     onlinePlayers[serverId] = [];
     await dbRun('UPDATE servers SET status = ? WHERE id = ?', ['stopped', serverId]);
     
     if (serverLogWatchers[serverId]) {
-      serverLogWatchers[serverId].close();
+      try { serverLogWatchers[serverId].close(); } catch {}
       delete serverLogWatchers[serverId];
     }
     delete serverLogPositions[serverId];
@@ -2777,11 +2944,11 @@ async function stopServer(serverId, force = false) {
     return false;
   }
 }
+
 function startLogTail(serverId) {
   const serverDir = resolveServerPath(serverId);
   const logPath = path.join(serverDir, 'logs', 'latest.log');
   
-  // Ensure log directory exists
   if (!fs.existsSync(path.dirname(logPath))) {
     fs.mkdirSync(path.dirname(logPath), { recursive: true });
   }
@@ -2791,7 +2958,6 @@ function startLogTail(serverId) {
   
   if (!serverLogPositions[serverId]) serverLogPositions[serverId] = 0;
   
-  // Set up log file watching
   const readNewLines = () => {
     let stats;
     try {
@@ -2824,45 +2990,27 @@ function startLogTail(serverId) {
     }
   };
   
-  // Also capture direct process output if available
-  const serverProcess = global.serverProcesses && global.serverProcesses[serverId];
-  if (serverProcess && serverProcess.stdout) {
-    serverProcess.stdout.on('data', (data) => {
-      const output = data.toString();
-      io.to(`server:${serverId}`).emit('console', output);
-      // Process each line for player join/leave detection
-      output.split('\n').forEach(line => {
-        if (line.trim()) processLogLine(serverId, line);
-      });
-    });
-    
-    serverProcess.stderr.on('data', (data) => {
-      const output = data.toString();
-      io.to(`server:${serverId}`).emit('console', output);
-    });
-  }
-  
   readNewLines();
-  const watcher = fs.watch(logPath, (eventType) => {
-    if (eventType === 'change') {
-      readNewLines();
-    }
-  });
   
-  // Add error handling for file watcher
-  watcher.on('error', (err) => {
-    console.error(`File watcher error for server ${serverId}:`, err.message);
-    // Try to close the watcher gracefully
+  if (!serverLogWatchers[serverId]) {
     try {
-      watcher.close();
-    } catch (closeErr) {
-      console.error(`Error closing watcher for server ${serverId}:`, closeErr.message);
+      const watcher = fs.watch(logPath, (eventType) => {
+        if (eventType === 'change') {
+          readNewLines();
+        }
+      });
+      
+      watcher.on('error', (err) => {
+        console.error(`File watcher error for server ${serverId}:`, err.message);
+        try { watcher.close(); } catch {}
+        delete serverLogWatchers[serverId];
+      });
+      
+      serverLogWatchers[serverId] = watcher;
+    } catch (e) {
+      console.error(`Could not start file watcher for server ${serverId}:`, e.message);
     }
-    // Remove from tracking
-    delete serverLogWatchers[serverId];
-  });
-  
-  serverLogWatchers[serverId] = watcher;
+  }
 }
 
 // Helper function to process log lines for player events

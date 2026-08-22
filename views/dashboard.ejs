@@ -95,7 +95,7 @@
                 <div class="modern-server-header">
                     <div class="server-title-section">
                         <div class="server-icon-wrapper">
-                            <i class="fas fa-cube"></i>
+                            <i class="fas <%= server.runtime_type === 'nodejs' ? 'fa-brands fa-node-js' : server.runtime_type === 'python' ? 'fa-brands fa-python' : 'fa-cube' %>" style="<%= server.runtime_type === 'nodejs' ? 'color: #68a063;' : server.runtime_type === 'python' ? 'color: #38bdf8;' : '' %>"></i>
                         </div>
                         <div class="server-title-info">
                             <h3 class="server-title"><%= server.name %></h3>

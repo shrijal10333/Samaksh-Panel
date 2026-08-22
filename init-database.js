@@ -77,6 +77,47 @@ function initializeDatabase() {
                 console.log('✓ Added locked_until column to users table');
             }
         });
+
+        // Add missing columns to servers table for Node.js and Python bots
+        db.run(`ALTER TABLE servers ADD COLUMN runtime_type TEXT DEFAULT 'minecraft'`, (err) => {
+            if (err && !err.message.includes('duplicate column')) {
+                console.error('Error adding runtime_type column:', err.message);
+            } else if (!err) {
+                console.log('✓ Added runtime_type column to servers table');
+            }
+        });
+
+        db.run(`ALTER TABLE servers ADD COLUMN startup_command TEXT DEFAULT ''`, (err) => {
+            if (err && !err.message.includes('duplicate column')) {
+                console.error('Error adding startup_command column:', err.message);
+            } else if (!err) {
+                console.log('✓ Added startup_command column to servers table');
+            }
+        });
+
+        db.run(`ALTER TABLE servers ADD COLUMN working_directory TEXT DEFAULT ''`, (err) => {
+            if (err && !err.message.includes('duplicate column')) {
+                console.error('Error adding working_directory column:', err.message);
+            } else if (!err) {
+                console.log('✓ Added working_directory column to servers table');
+            }
+        });
+
+        db.run(`ALTER TABLE servers ADD COLUMN environment_variables TEXT DEFAULT '{}'`, (err) => {
+            if (err && !err.message.includes('duplicate column')) {
+                console.error('Error adding environment_variables column:', err.message);
+            } else if (!err) {
+                console.log('✓ Added environment_variables column to servers table');
+            }
+        });
+
+        db.run(`ALTER TABLE servers ADD COLUMN description TEXT DEFAULT ''`, (err) => {
+            if (err && !err.message.includes('duplicate column')) {
+                console.error('Error adding description column:', err.message);
+            } else if (!err) {
+                console.log('✓ Added description column to servers table');
+            }
+        });
         
         // Create welcome notifications for existing users
         db.all('SELECT id, username FROM users', [], (err, users) => {

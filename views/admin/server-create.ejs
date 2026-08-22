@@ -4,9 +4,9 @@
     <div>
         <h1 class="page-title">
             <i class="fas fa-server"></i>
-            Create New Server
+            Create New Server / Bot
         </h1>
-        <p class="page-subtitle">Add a new Minecraft server to the panel</p>
+        <p class="page-subtitle">Deploy a new Minecraft server, Node.js bot, or Python bot</p>
     </div>
     <a href="/admin/servers" class="btn btn-secondary">
         <i class="fas fa-arrow-left"></i>
@@ -20,30 +20,59 @@
             <div class="card-header">
                 <h3 style="display: flex; align-items: center; gap: 10px;">
                     <i class="fas fa-cog" style="color: var(--accent-primary);"></i>
-                    Server Configuration
+                    Instance Configuration
                 </h3>
             </div>
             <div class="card-body">
                 <form id="createServerForm" method="post" action="/admin/servers/create">
+                    
+                    <!-- Runtime Platform Selector -->
                     <div class="form-group">
                         <label class="form-label">
-                            <i class="fas fa-tag"></i>
-                            Server Name *
+                            <i class="fas fa-layer-group"></i>
+                            Runtime / Application Platform *
                         </label>
-                        <div class="input-wrapper">
-                            <input type="text" name="name" class="form-control" placeholder="My Minecraft Server" required minlength="3" maxlength="64">
-                            <i class="fas fa-tag input-icon"></i>
-                        </div>
+                        <select name="runtime_type" id="runtimeType" class="form-control" required style="font-weight: 600;">
+                            <option value="minecraft" selected>🎮 Minecraft Server (Java / Bedrock / Proxies)</option>
+                            <option value="nodejs">🟢 Node.js Bot / App (Discord, Telegram, Webhooks, API)</option>
+                            <option value="python">🐍 Python Bot / App (Discord, Telegram, AI, Scripts)</option>
+                        </select>
                         <span class="form-help">
                             <i class="fas fa-info-circle"></i>
-                            A friendly name for your server (3-64 characters)
+                            Select whether this instance will run Minecraft or a standalone Node.js / Python bot
                         </span>
                     </div>
 
                     <div class="form-group">
                         <label class="form-label">
+                            <i class="fas fa-tag"></i>
+                            Server / Bot Name *
+                        </label>
+                        <div class="input-wrapper">
+                            <input type="text" name="name" id="serverName" class="form-control" placeholder="My Instance" required minlength="3" maxlength="64">
+                            <i class="fas fa-tag input-icon"></i>
+                        </div>
+                        <span class="form-help">
+                            <i class="fas fa-info-circle"></i>
+                            A friendly name for your server or bot (3-64 characters)
+                        </span>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">
+                            <i class="fas fa-align-left"></i>
+                            Description
+                        </label>
+                        <div class="input-wrapper">
+                            <input type="text" name="description" class="form-control" placeholder="Production Discord bot / SMP server" maxlength="255">
+                            <i class="fas fa-align-left input-icon"></i>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">
                             <i class="fas fa-user"></i>
-                            Server Owner *
+                            Owner *
                         </label>
                         <select name="owner_id" class="form-control" required>
                             <option value="">Select owner...</option>
@@ -53,60 +82,111 @@
                         </select>
                         <span class="form-help">
                             <i class="fas fa-info-circle"></i>
-                            The user who will own and manage this server
+                            The user who will own and manage this instance
                         </span>
                     </div>
 
-                    <div class="form-group">
-                        <label class="form-label">
-                            <i class="fas fa-cube"></i>
-                            Server Type *
-                        </label>
-                        <select name="server_type" id="serverType" class="form-control" required>
-                            <option value="">Select server type...</option>
-                            <option value="vanilla">Vanilla - Official Minecraft server</option>
-                            <option value="paper">Paper - High performance fork</option>
-                            <option value="purpur">Purpur - Feature-rich Paper fork</option>
-                            <option value="spigot">Spigot - Plugin support</option>
-                            <option value="fabric">Fabric - Modding platform</option>
-                            <option value="forge">Forge - Modding platform</option>
-                            <option value="velocity">Velocity - Modern proxy</option>
-                            <option value="bungeecord">BungeeCord - Classic proxy</option>
-                            <option value="waterfall">Waterfall - BungeeCord fork</option>
-                            <option value="bedrock">Bedrock - Bedrock Edition</option>
-                        </select>
-                        <span class="form-help">
-                            <i class="fas fa-info-circle"></i>
-                            Choose the server software type
-                        </span>
+                    <!-- MINECRAFT SPECIFIC FIELDS -->
+                    <div id="minecraftFields">
+                        <div class="form-group">
+                            <label class="form-label">
+                                <i class="fas fa-cube"></i>
+                                Minecraft Server Software *
+                            </label>
+                            <select name="server_type" id="serverType" class="form-control">
+                                <option value="">Select server type...</option>
+                                <option value="vanilla">Vanilla - Official Minecraft server</option>
+                                <option value="paper" selected>Paper - High performance fork</option>
+                                <option value="purpur">Purpur - Feature-rich Paper fork</option>
+                                <option value="spigot">Spigot - Plugin support</option>
+                                <option value="fabric">Fabric - Modding platform</option>
+                                <option value="forge">Forge - Modding platform</option>
+                                <option value="velocity">Velocity - Modern proxy</option>
+                                <option value="bungeecord">BungeeCord - Classic proxy</option>
+                                <option value="waterfall">Waterfall - BungeeCord fork</option>
+                                <option value="bedrock">Bedrock - Bedrock Edition</option>
+                            </select>
+                            <span class="form-help">
+                                <i class="fas fa-info-circle"></i>
+                                Choose the server software type
+                            </span>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">
+                                <i class="fas fa-code-branch"></i>
+                                Minecraft Version *
+                            </label>
+                            <select name="version" id="versionSelect" class="form-control">
+                                <option value="latest">Latest</option>
+                            </select>
+                            <span class="form-help" id="versionHelp">
+                                <i class="fas fa-info-circle"></i>
+                                Select a server type to load available versions
+                            </span>
+                        </div>
                     </div>
 
-                    <div class="form-group">
-                        <label class="form-label">
-                            <i class="fas fa-code-branch"></i>
-                            Minecraft Version *
-                        </label>
-                        <select name="version" id="versionSelect" class="form-control" required disabled>
-                            <option value="">Select server type first...</option>
-                        </select>
-                        <span class="form-help" id="versionHelp">
-                            <i class="fas fa-info-circle"></i>
-                            Select a server type to load available versions
-                        </span>
+                    <!-- BOT / CUSTOM SCRIPT SPECIFIC FIELDS -->
+                    <div id="botFields" style="display: none;">
+                        <div class="form-group">
+                            <label class="form-label">
+                                <i class="fas fa-terminal"></i>
+                                Startup Command *
+                            </label>
+                            <div class="input-wrapper">
+                                <input type="text" name="startup_command" id="startupCommand" class="form-control" placeholder="node index.js" value="node index.js" style="font-family: monospace;">
+                                <i class="fas fa-terminal input-icon"></i>
+                            </div>
+                            <span class="form-help" id="startupHelp">
+                                <i class="fas fa-info-circle"></i>
+                                The command used to launch your bot process (e.g. <code>node index.js</code>, <code>npm start</code>, <code>python3 bot.py</code>)
+                            </span>
+                            <div style="display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap;" id="presetCommands">
+                                <!-- Filled by JS -->
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">
+                                <i class="fas fa-folder"></i>
+                                Working Directory
+                            </label>
+                            <div class="input-wrapper">
+                                <input type="text" name="working_directory" id="workingDirectory" class="form-control" placeholder="." value="." style="font-family: monospace;">
+                                <i class="fas fa-folder input-icon"></i>
+                            </div>
+                            <span class="form-help">
+                                <i class="fas fa-info-circle"></i>
+                                Relative directory path where the bot script executes (default: <code>.</code>)
+                            </span>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">
+                                <i class="fas fa-key"></i>
+                                Environment Variables (.env / KEY=VALUE)
+                            </label>
+                            <textarea name="environment_variables" id="envVariables" class="form-control" rows="4" placeholder="BOT_TOKEN=your_token_here&#10;PREFIX=!&#10;NODE_ENV=production" style="font-family: monospace; font-size: 13px;"></textarea>
+                            <span class="form-help">
+                                <i class="fas fa-info-circle"></i>
+                                Key=Value pairs automatically injected as process environment variables and synced to <code>.env</code>
+                            </span>
+                        </div>
                     </div>
 
                     <div class="form-group">
                         <label class="form-label">
                             <i class="fas fa-network-wired"></i>
-                            Server Port *
+                            Port *
                         </label>
                         <div class="input-wrapper">
-                            <input type="number" name="port" class="form-control" placeholder="25565" required min="1024" max="65535" value="25565">
+                            <input type="number" name="port" id="portInput" class="form-control" placeholder="25565" required min="1024" max="65535" value="25565">
                             <i class="fas fa-network-wired input-icon"></i>
                         </div>
-                        <span class="form-help">
+                        <span class="form-help" id="portHelp">
                             <i class="fas fa-info-circle"></i>
-                            Port number for the server (1024-65535, default: 25565)
+                            Port number for the instance (1024-65535, default: 25565)
                         </span>
                     </div>
 
@@ -121,7 +201,7 @@
                         </div>
                         <span class="form-help">
                             <i class="fas fa-info-circle"></i>
-                            Memory allocated to the server (minimum: 512 MB, recommended: 1024+ MB)
+                            Memory allocated to the instance (minimum: 512 MB, recommended: 1024+ MB)
                         </span>
                     </div>
 
@@ -162,7 +242,7 @@
                         </a>
                         <button type="submit" class="btn btn-primary" id="submitBtn">
                             <i class="fas fa-plus"></i>
-                            Create Server
+                            Create Instance
                         </button>
                     </div>
                 </form>
@@ -173,12 +253,14 @@
     <div class="col-4">
         <div class="card">
             <div class="card-header">
-                <h3><i class="fas fa-question-circle"></i> Help</h3>
+                <h3><i class="fas fa-question-circle"></i> Platform Help</h3>
             </div>
-            <div class="card-body">
-                <p><strong>Server Types:</strong> Vanilla, Paper, Purpur (plugins), Fabric/Forge (mods), Velocity/BungeeCord (proxy)</p>
-                <p><strong>Port:</strong> Default is 25565</p>
-                <p><strong>RAM:</strong> Minimum 512 MB, recommended 1024+ MB</p>
+            <div class="card-body" style="font-size: 14px; line-height: 1.6;">
+                <p><strong>🎮 Minecraft Servers:</strong> Java Edition (Paper, Purpur, Spigot, Fabric, Forge), Proxies (Velocity, BungeeCord), and Bedrock Edition.</p>
+                <hr style="border: 0; border-top: 1px solid var(--border-primary); margin: 12px 0;">
+                <p><strong>🟢 Node.js Bots:</strong> Runs any Node.js Discord bot, Telegram bot, or microservice. Customizable startup commands like <code>node index.js</code> or <code>npm start</code>.</p>
+                <hr style="border: 0; border-top: 1px solid var(--border-primary); margin: 12px 0;">
+                <p><strong>🐍 Python Bots:</strong> Runs Discord.py, python-telegram-bot, Flask/FastAPI, AI scripts, etc. Startup command default: <code>python3 bot.py</code>.</p>
             </div>
         </div>
     </div>
@@ -190,86 +272,124 @@
 (function() {
     'use strict';
     
-    console.log('✅ Script loaded');
-    
-    // Wait for DOM
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', init);
-    } else {
-        init();
-    }
+    document.addEventListener('DOMContentLoaded', init);
     
     function init() {
-        console.log('✅ Initializing...');
-        
+        const runtimeType = document.getElementById('runtimeType');
+        const minecraftFields = document.getElementById('minecraftFields');
+        const botFields = document.getElementById('botFields');
         const serverTypeSelect = document.getElementById('serverType');
         const versionSelect = document.getElementById('versionSelect');
         const versionHelp = document.getElementById('versionHelp');
+        const startupCommand = document.getElementById('startupCommand');
+        const presetCommands = document.getElementById('presetCommands');
+        const portInput = document.getElementById('portInput');
+        const portHelp = document.getElementById('portHelp');
         const form = document.getElementById('createServerForm');
-        
-        if (!serverTypeSelect || !versionSelect || !versionHelp) {
-            console.error('❌ Elements not found');
-            return;
+
+        function updatePlatformUI() {
+            const val = runtimeType.value;
+            if (val === 'minecraft') {
+                minecraftFields.style.display = 'block';
+                botFields.style.display = 'none';
+                if (serverTypeSelect) serverTypeSelect.required = true;
+                if (versionSelect) versionSelect.required = true;
+                if (portInput.value === '8000' || portInput.value === '8080') portInput.value = '25565';
+                portHelp.innerHTML = '<i class="fas fa-info-circle"></i> Default Minecraft port: 25565';
+            } else if (val === 'nodejs') {
+                minecraftFields.style.display = 'none';
+                botFields.style.display = 'block';
+                if (serverTypeSelect) serverTypeSelect.required = false;
+                if (versionSelect) versionSelect.required = false;
+                if (!startupCommand.value || startupCommand.value.startsWith('python')) {
+                    startupCommand.value = 'node index.js';
+                }
+                if (portInput.value === '25565') portInput.value = '8000';
+                portHelp.innerHTML = '<i class="fas fa-info-circle"></i> Port assigned to PORT env var (e.g. 8000)';
+                renderPresets(['node index.js', 'node bot.js', 'npm start', 'npm run dev']);
+            } else if (val === 'python') {
+                minecraftFields.style.display = 'none';
+                botFields.style.display = 'block';
+                if (serverTypeSelect) serverTypeSelect.required = false;
+                if (versionSelect) versionSelect.required = false;
+                if (!startupCommand.value || startupCommand.value.startsWith('node')) {
+                    startupCommand.value = 'python3 bot.py';
+                }
+                if (portInput.value === '25565') portInput.value = '8000';
+                portHelp.innerHTML = '<i class="fas fa-info-circle"></i> Port assigned to PORT env var (e.g. 8000)';
+                renderPresets(['python3 bot.py', 'python3 main.py', 'python bot.py', 'python main.py']);
+            }
+        }
+
+        function renderPresets(presets) {
+            presetCommands.innerHTML = '';
+            presets.forEach(cmd => {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'btn btn-secondary btn-sm';
+                btn.style.fontSize = '12px';
+                btn.textContent = cmd;
+                btn.onclick = () => { startupCommand.value = cmd; };
+                presetCommands.appendChild(btn);
+            });
+        }
+
+        runtimeType.addEventListener('change', updatePlatformUI);
+        updatePlatformUI();
+
+        // Minecraft version loader
+        if (serverTypeSelect) {
+            serverTypeSelect.addEventListener('change', async function() {
+                const serverType = this.value;
+                if (!serverType) {
+                    versionSelect.disabled = true;
+                    versionSelect.innerHTML = '<option value="">Select server type first...</option>';
+                    versionHelp.innerHTML = '<i class="fas fa-info-circle"></i> Select a server type';
+                    return;
+                }
+                
+                versionSelect.disabled = true;
+                versionSelect.innerHTML = '<option value="">Loading...</option>';
+                versionHelp.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading versions...';
+                
+                try {
+                    const response = await fetch('/api/versions/' + serverType + '?limit=30');
+                    const data = await response.json();
+                    
+                    if (data.success && data.versions && data.versions.length > 0) {
+                        versionSelect.innerHTML = '<option value="">Select version...</option>';
+                        data.versions.forEach(function(v) {
+                            const opt = document.createElement('option');
+                            opt.value = v;
+                            opt.textContent = v;
+                            versionSelect.appendChild(opt);
+                        });
+                        versionSelect.disabled = false;
+                        versionHelp.innerHTML = '<i class="fas fa-check-circle" style="color: #10b981;"></i> ' + data.versions.length + ' versions available';
+                    } else {
+                        versionSelect.innerHTML = '<option value="latest">Latest</option>';
+                        versionSelect.disabled = false;
+                        versionHelp.innerHTML = '<i class="fas fa-info-circle"></i> Default latest version';
+                    }
+                } catch (error) {
+                    console.error('Error fetching versions:', error);
+                    versionSelect.innerHTML = '<option value="latest">Latest</option>';
+                    versionSelect.disabled = false;
+                    versionHelp.innerHTML = '<i class="fas fa-info-circle"></i> Default latest version';
+                }
+            });
+
+            // Trigger initial fetch if paper is selected
+            if (serverTypeSelect.value) {
+                serverTypeSelect.dispatchEvent(new Event('change'));
+            }
         }
         
-        console.log('✅ Elements found');
-        
-        // Attach change event
-        serverTypeSelect.addEventListener('change', async function() {
-            const serverType = this.value;
-            console.log('🔄 Server type changed:', serverType);
-            
-            if (!serverType) {
-                versionSelect.disabled = true;
-                versionSelect.innerHTML = '<option value="">Select server type first...</option>';
-                versionHelp.innerHTML = '<i class="fas fa-info-circle"></i> Select a server type';
-                return;
-            }
-            
-            // Loading state
-            versionSelect.disabled = true;
-            versionSelect.innerHTML = '<option value="">Loading...</option>';
-            versionHelp.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading versions...';
-            
-            try {
-                console.log('📡 Fetching versions...');
-                const response = await fetch('/api/versions/' + serverType + '?limit=30');
-                const data = await response.json();
-                
-                console.log('📦 Response:', data);
-                
-                if (data.success && data.versions && data.versions.length > 0) {
-                    versionSelect.innerHTML = '<option value="">Select version...</option>';
-                    data.versions.forEach(function(v) {
-                        const opt = document.createElement('option');
-                        opt.value = v;
-                        opt.textContent = v;
-                        versionSelect.appendChild(opt);
-                    });
-                    versionSelect.disabled = false;
-                    versionHelp.innerHTML = '<i class="fas fa-check-circle" style="color: #10b981;"></i> ' + data.versions.length + ' versions available';
-                    console.log('✅ Loaded ' + data.versions.length + ' versions');
-                } else {
-                    versionSelect.innerHTML = '<option value="">No versions</option>';
-                    versionHelp.innerHTML = '<i class="fas fa-exclamation-triangle" style="color: #f59e0b;"></i> No versions found';
-                    console.warn('⚠️ No versions');
-                }
-            } catch (error) {
-                console.error('❌ Error:', error);
-                versionSelect.innerHTML = '<option value="">Error</option>';
-                versionHelp.innerHTML = '<i class="fas fa-times-circle" style="color: #ef4444;"></i> Failed to load';
-            }
-        });
-        
-        // Form submit
-        form.addEventListener('submit', function(e) {
+        form.addEventListener('submit', function() {
             const submitBtn = document.getElementById('submitBtn');
             submitBtn.disabled = true;
             submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Creating...';
-            // Form will submit naturally to /admin/servers/create
         });
-        
-        console.log('✅ Initialization complete');
     }
 })();
 </script>
