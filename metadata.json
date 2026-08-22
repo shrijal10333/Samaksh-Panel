@@ -1,0 +1,6 @@
+{
+  "name": "Samaksh Panel",
+  "description": "A web-based Minecraft server management panel built with Node.js and Express.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

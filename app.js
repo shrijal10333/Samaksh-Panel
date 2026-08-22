@@ -10352,7 +10352,7 @@ async function reconnectToRunningServers() {
 
 // START SERVER
 // ================================================
-server.listen(port, async () => {
+server.listen(port, '0.0.0.0', async () => {
     console.log(`Minecraft Panel running on http://localhost:${port}`);
     console.log(`Admin login: admin / admin123`);
     
